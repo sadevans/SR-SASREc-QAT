@@ -9,7 +9,7 @@ import torch
 from torch import Tensor, nn
 from torch.nn import functional as F
 
-from ..utils import gather_quantizable_layers, move_batch_to_device, replace_module
+from utils import gather_quantizable_layers, move_batch_to_device, replace_module
 from .base import QuantStrategy, UniformAffineQuantizer
 
 

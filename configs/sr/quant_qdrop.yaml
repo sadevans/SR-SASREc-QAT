@@ -1,0 +1,10 @@
+base_config: ./base_sr.yaml
+experiment:
+  name: espcn_qdrop_qat
+
+quantization:
+  method: qdrop
+  weight_bits: 8
+  act_bits: 8
+  qdrop:
+    drop_prob: 0.1

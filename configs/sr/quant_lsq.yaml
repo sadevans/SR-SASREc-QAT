@@ -1,0 +1,10 @@
+base_config: ./base_sr.yaml
+experiment:
+  name: espcn_lsq_qat
+
+quantization:
+  method: lsq
+  weight_bits: 8
+  act_bits: 8
+  lsq:
+    alpha_init: 1.0

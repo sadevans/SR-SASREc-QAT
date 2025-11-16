@@ -1,0 +1,10 @@
+base_config: ./base_sr.yaml
+experiment:
+  name: espcn_pact_qat
+
+quantization:
+  method: pact
+  weight_bits: 8
+  act_bits: 8
+  pact:
+    clip_init: 1.0

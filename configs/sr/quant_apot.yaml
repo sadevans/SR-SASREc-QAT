@@ -1,0 +1,11 @@
+base_config: ./base_sr.yaml
+experiment:
+  name: espcn_apot_qat
+
+quantization:
+  method: apot
+  weight_bits: 8
+  act_bits: 8
+  apot:
+    n_levels: 256  # 2^8
+    granularity: per-channel  # or per-tensor

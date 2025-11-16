@@ -1,5 +1,4 @@
 """Base abstractions and utilities for quantization strategies."""
-
 from __future__ import annotations
 
 import abc
@@ -10,8 +9,7 @@ import torch
 from torch import Tensor, nn
 from torch.nn import functional as F
 
-from ..utils import gather_quantizable_layers, replace_module
-
+from utils import gather_quantizable_layers, replace_module
 
 class FakeQuantizer(nn.Module, metaclass=abc.ABCMeta):
     """Abstract fake-quantizer to share between strategies."""

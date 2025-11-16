@@ -1,0 +1,3 @@
+base_config: ./base_sr.yaml
+experiment:
+  name: espcn_fp32

@@ -1,0 +1,13 @@
+base_config: ./base_sr.yaml
+experiment:
+  name: espcn_adaround_ptq
+
+quantization:
+  method: adaround
+  weight_bits: 8
+  act_bits: 8
+  adaround:
+    num_iterations: 1000
+    batch_size: 16
+    lr: 0.0001
+    warmup_epochs: 0
