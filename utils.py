@@ -67,7 +67,6 @@ def load_config(config_path: str | Path) -> Dict[str, Any]:
         merged: Dict[str, Any] = {}
 
         base_cfg = _resolve_config_path(path, data.get("base_config"))
-        print(base_cfg)
         if base_cfg:
             merged = deep_update(merged, _load(base_cfg, stack + [path]))
 
