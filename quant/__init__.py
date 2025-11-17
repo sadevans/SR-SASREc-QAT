@@ -1,14 +1,14 @@
 from .lsq import LSQQuantStrategy
-from .pact import PACTActivationQuantizer
+from .pact import PACTQuantStrategy
 from .adaround import AdaRoundQuantStrategy
-from .apot import APoTQuantizer
-from .qdrop import QDropQuantizer
+from .apot import APoTQuantStrategy
+from .qdrop import QDropQuantStrategy
 
 
 QUANTIZER_MAP = {
     "lsq": LSQQuantStrategy,
-    "pact": PACTActivationQuantizer,
-    "apot": APoTQuantizer,
-    "qdrop": QDropQuantizer,
+    "pact": PACTQuantStrategy,
+    "apot": APoTQuantStrategy,
+    "qdrop": QDropQuantStrategy,
     "adaround": AdaRoundQuantStrategy,
 }
