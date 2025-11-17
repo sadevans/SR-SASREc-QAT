@@ -28,7 +28,6 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True)
     args = parser.parse_args()
-    print('config: ', args.config)
     config = load_config(args.config)
     set_random_seeds(config["experiment"].get("seed", 42), config["experiment"].get("deterministic", True))
     # logger = get_logger()
@@ -46,10 +45,8 @@ def main():
     criterion = torch.nn.L1Loss()  # или MSELoss
 
     train_loader = get_train_loader(config)
-    print('train loader: ', len(train_loader))
     val_datasets = get_val_datasets(config)
 
-    print(val_datasets, len(val_datasets[0]), len(val_datasets[1]))
     best_psnr = 0
     run_dir = f"runs/{config['experiment']['name']}"
     os.makedirs(run_dir, exist_ok=True)

@@ -105,7 +105,6 @@ class QuantizedESPCN(nn.Module):
         self.upscale_factor = upscale_factor
         self.quant_config = _normalize_quant_config(quant_config)
         self.method = self.quant_config['method']
-        print(self.method)
 
         # Инициализация квантователей
         if self.method != "none":
