@@ -1,9 +1,65 @@
 import math
+from copy import deepcopy
+from typing import Any, Dict, Optional
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch import Tensor
+
 from quant import QUANTIZER_MAP
+
+
+def _normalize_quant_config(raw_config: Optional[dict]) -> Dict[str, Any]:
+    """
+    Merge user-provided quantization config with defaults and method-specific overrides.
+
+    The YAML files follow the pattern:
+
+    quantization:
+      method: lsq
+      weight_bits: 4
+      act_bits: 4
+      lsq:
+        alpha_init: 1.0
+
+    Strategies expect canonical names like ``bits``/``activation_bits`` and flat dictionaries.
+    """
+
+    defaults: Dict[str, Any] = {
+        "method": "none",
+        "weight_bits": 8,
+        "act_bits": 8,
+    }
+    config = deepcopy(raw_config) if raw_config is not None else {}
+    merged: Dict[str, Any] = {**defaults, **config}
+
+    method = str(merged.get("method", "none")).lower()
+    merged["method"] = method
+
+    method_overrides = config.get(method) if isinstance(config, dict) else None
+    if isinstance(method_overrides, dict):
+        merged.update(method_overrides)
+
+    # Canonical key names expected by strategy classes.
+    if "weight_bits" in merged and "bits" not in merged:
+        merged["bits"] = merged["weight_bits"]
+    if "act_bits" in merged and "activation_bits" not in merged:
+        merged["activation_bits"] = merged["act_bits"]
+
+    # Common synonyms from the YAML configs.
+    synonym_map = {
+        "clip_init": "alpha_init",
+        "drop_prob": "qdrop_p",
+        "num_iterations": "rounding_iters",
+        "m": "apot_m",
+        "k": "apot_k",
+    }
+    for source, target in synonym_map.items():
+        if source in merged and target not in merged:
+            merged[target] = merged[source]
+
+    return merged
 
 
 class QuantizedConv2d(nn.Module):
@@ -47,13 +103,25 @@ class QuantizedESPCN(nn.Module):
     ) -> None:
         super().__init__()
         self.upscale_factor = upscale_factor
-        self.quant_config = quant_config or {'method': 'none', 'weight_bits': 8, 'act_bits': 8}
+        self.quant_config = _normalize_quant_config(quant_config)
         self.method = self.quant_config['method']
+        print(self.method)
 
         # Инициализация квантователей
-        if self.method != 'none':
-            self.weight_quant = QUANTIZER_MAP[self.method](self.quant_config, mode='weight')
-            self.act_quant = QUANTIZER_MAP[self.method](self.quant_config, mode='activation')
+        if self.method != "none":
+            strategy_cls = QUANTIZER_MAP.get(self.method)
+            if strategy_cls is None:
+                raise ValueError(f"Unknown quantization method '{self.method}'. "
+                                f"Available: {sorted(QUANTIZER_MAP.keys())}")
+
+            # AdaRound — PTQ, не требует weight/act quantizers в модели
+            if self.method == "adaround":
+                self.weight_quant = self.act_quant = lambda x: x
+            else:
+                strategy = strategy_cls(self.quant_config)
+                dummy_conv = nn.Conv2d(1, 1, 1)
+                self.weight_quant = strategy.create_weight_quantizer("conv", dummy_conv)
+                self.act_quant = strategy.create_activation_quantizer("conv", dummy_conv)
         else:
             self.weight_quant = self.act_quant = lambda x: x
 
