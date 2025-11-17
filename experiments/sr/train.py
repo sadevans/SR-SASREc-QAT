@@ -35,27 +35,29 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = QuantizedESPCN(
-        in_channels=config.model.in_channels,
-        out_channels=config.model.out_channels,
-        channels=config.model.channels,
-        upscale_factor=config.model.upscale_factor,
-        quant_config=config.quantization
+        in_channels=config['model']['in_channels'],
+        out_channels=config['model']['out_channels'],
+        channels=config['model']['channels'],
+        upscale_factor=config['model']['upscale_factor'],
+        quant_config=config['quantization']
     ).to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=config.training.lr)
+    optimizer = optim.Adam(model.parameters(), lr=config['training']['lr'])
     criterion = torch.nn.L1Loss()  # или MSELoss
 
     train_loader = get_train_loader(config)
+    print('train loader: ', len(train_loader))
     val_datasets = get_val_datasets(config)
 
+    print(val_datasets, len(val_datasets[0]), len(val_datasets[1]))
     best_psnr = 0
-    run_dir = f"runs/{config.experiment.name}"
+    run_dir = f"runs/{config['experiment']['name']}"
     os.makedirs(run_dir, exist_ok=True)
 
-    for epoch in range(config.training.epochs):
-        loss = train_one_epoch(model, train_loader, criterion, optimizer, device, config.training.grad_clip)
+    for epoch in range(config['training']['epochs']):
+        loss = train_one_epoch(model, train_loader, criterion, optimizer, device, config['training']['grad_clip'])
         psnr = validate(model, val_datasets[0], device)  # validate on Set5
-        print(f"Epoch {epoch+1}/{config.training.epochs} | Loss: {loss:.4f} | PSNR: {psnr:.2f}")
+        print(f"Epoch {epoch+1}/{config['training']['epochs']} | Loss: {loss:.4f} | PSNR: {psnr:.2f}")
 
         if psnr > best_psnr:
             best_psnr = psnr
@@ -64,7 +66,7 @@ def main():
     # Save final metrics
     final_psnr = validate(model, val_datasets[0], device)
     results = {"psnr": final_psnr, "config": dict(config)}
-    with open(f"results/{config.experiment.name}.json", "w") as f:
+    with open(f"results/{config['experiment']['name']}.json", "w") as f:
         json.dump(results, f, indent=2)
 
 
