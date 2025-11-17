@@ -1,18 +1,26 @@
-import os
 import random
 from pathlib import Path
 from PIL import Image
-import torch
 from torch.utils.data import Dataset, DataLoader
-import torchvision
 from torchvision import transforms as T
 
 
 class DIV2KTrainDataset(Dataset):
-    def __init__(self, hr_dir, patch_size=96, scale=3, rgb_range=1.0):
-        self.hr_files = sorted(Path(hr_dir).glob("*.png"))
+    def __init__(self, hr_dir, patch_size=96, upscale_factor=4, rgb_range=1.0):
+        hr_dir = Path(hr_dir)
+        if not hr_dir.exists():
+            raise FileNotFoundError(f"HR directory does not exist: {hr_dir}")
+        self.hr_files = sorted(
+            p for ext in ("*.png", "*.jpg", "*.jpeg")
+            for p in hr_dir.rglob(ext)
+        )
+        if not self.hr_files:
+            raise FileNotFoundError(f"No HR images found in {hr_dir}")
+        if patch_size % upscale_factor != 0:
+            raise ValueError(f"patch_size ({patch_size}) must be divisible by scale ({upscale_factor})")
+        self.gt_image_size = int(17 * upscale_factor)
         self.patch_size = patch_size
-        self.scale = scale
+        self.upscale_factor = upscale_factor
         self.rgb_range = rgb_range
         self.transform = T.ToTensor()
 
@@ -20,24 +28,32 @@ class DIV2KTrainDataset(Dataset):
         return len(self.hr_files)
 
     def __getitem__(self, idx):
-        hr = Image.open(self.hr_files[idx]).convert("RGB")
+        hr = Image.open(self.hr_files[idx]).convert("L")
         w, h = hr.size
+        if w < self.patch_size or h < self.patch_size:
+            raise ValueError(
+                f"Patch size {self.patch_size} is larger than HR image size {(w, h)} for {self.hr_files[idx]}"
+            )
         # Random crop
         x = random.randint(0, w - self.patch_size)
         y = random.randint(0, h - self.patch_size)
         hr = hr.crop((x, y, x + self.patch_size, y + self.patch_size))
-        lr = hr.resize((self.patch_size // self.scale, self.patch_size // self.scale), Image.BICUBIC)
+        lr = hr.resize((self.patch_size // self.upscale_factor, self.patch_size // self.upscale_factor), Image.BICUBIC)
         hr = self.transform(hr) * self.rgb_range
         lr = self.transform(lr) * self.rgb_range
         return lr, hr
 
 
 class SRBenchmarkDataset(Dataset):
-    def __init__(self, hr_dir, scale=3, rgb_range=1.0):
-        self.hr_files = sorted(Path(hr_dir).rglob("*_HR.png"))
+    def __init__(self, hr_dir, upscale_factor=4, rgb_range=1.0):
+        hr_dir = Path(hr_dir)
+        if not hr_dir.exists():
+            raise FileNotFoundError(f"HR directory does not exist: {hr_dir}")
+        scale_tag = f"SRF_{upscale_factor}_HR.png"
+        self.hr_files = sorted(hr_dir.rglob(f"*{scale_tag}"))
         if len(self.hr_files) == 0:
-            raise FileNotFoundError(f"No HR images found in {hr_dir}")
-        self.scale = scale
+            raise FileNotFoundError(f"No HR images for scale x{upscale_factor} found in {hr_dir}")
+        self.upscale_factor = upscale_factor
         self.rgb_range = rgb_range
         self.transform = T.ToTensor()
 
@@ -46,29 +62,25 @@ class SRBenchmarkDataset(Dataset):
 
     def __getitem__(self, idx):
         hr_path = self.hr_files[idx]
-        name = hr_path.stem  # e.g. "img_001_SRF_2_HR"
+        name = hr_path.stem
 
-        # Извлекаем базовое имя и масштаб
-        base_name = name.replace("_HR", "")  # "img_001_SRF_2"
-        lr_name = base_name + "_LR.png"     # "img_001_SRF_2_LR.png"
+        base_name = name.replace("_HR", "")
+        lr_name = base_name + "_LR.png"
 
-        # Путь к LR: в той же директории, что и HR
         lr_path = hr_path.parent / lr_name
 
         if not lr_path.exists():
             raise FileNotFoundError(f"LR image not found: {lr_path}")
 
-        hr = Image.open(hr_path).convert("RGB")
-        lr = Image.open(lr_path).convert("RGB")
+        hr = Image.open(hr_path).convert("L")
+        lr = Image.open(lr_path).convert("L")
 
-        # Убедитесь, что размеры совпадают по масштабу
         w_lr, h_lr = lr.size
-        w_hr_target = w_lr * self.scale
-        h_hr_target = h_lr * self.scale
+        w_hr_target = w_lr * self.upscale_factor
+        h_hr_target = h_lr * self.upscale_factor
         w_hr, h_hr = hr.size
 
         if w_hr != w_hr_target or h_hr != h_hr_target:
-            # Обрезаем HR до нужного размера
             hr = hr.crop((0, 0, w_hr_target, h_hr_target))
 
         hr = self.transform(hr) * self.rgb_range
@@ -80,7 +92,7 @@ def get_train_loader(config):
     ds = DIV2KTrainDataset(
         hr_dir=config['data']['train_dir'],
         patch_size=config['data']['patch_size'],
-        scale=config['model']['upscale_factor'],
+        upscale_factor=config['model']['upscale_factor'],
         rgb_range=config['data']['rgb_range']
     )
     return DataLoader(
@@ -94,6 +106,6 @@ def get_train_loader(config):
 
 def get_val_datasets(config):
     return [
-        SRBenchmarkDataset(hr_dir=dir, scale=config['model']['upscale_factor'], rgb_range=config['data']['rgb_range'])
+        SRBenchmarkDataset(hr_dir=dir, upscale_factor=config['model']['upscale_factor'], rgb_range=config['data']['rgb_range'])
         for dir in config['data']['val_dirs']
     ]

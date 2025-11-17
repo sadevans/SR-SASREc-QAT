@@ -5,7 +5,7 @@ import torch
 from torch import optim
 from utils import load_config, set_random_seeds
 from experiments.sr.models import QuantizedESPCN
-from experiments.sr.data import get_train_loader, get_val_datasets
+from experiments.sr.data_1 import get_train_loader, get_val_datasets
 from experiments.sr.evaluate import validate
 
 def train_one_epoch(model, loader, criterion, optimizer, device, grad_clip):
