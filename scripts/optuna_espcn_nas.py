@@ -9,13 +9,14 @@ import time
 import yaml
 import argparse
 import optuna
-from sr_experiments.train import train_one_epoch, validate
-from sr_experiments.data import get_train_loader, get_val_datasets
-from sr_experiments.models import QuantizedESPCN
-from utils import set_seed
+import torch
+from experiments.sr.train import train_one_epoch, validate
+from experiments.sr.data import get_train_loader, get_val_datasets
+from experiments.sr.models import QuantizedESPCN
+from utils import set_random_seeds, load_config
 
 def objective(trial, base_config):
-    set_seed(42)
+    set_random_seeds(42)
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
     # Search space
