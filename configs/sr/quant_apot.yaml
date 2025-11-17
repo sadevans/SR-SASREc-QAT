@@ -7,5 +7,5 @@ quantization:
   weight_bits: 8
   act_bits: 8
   apot:
-    n_levels: 256  # 2^8
-    granularity: per-channel  # or per-tensor
+    m: 2          # number of additive components
+    k: 4          # bits per component (m * k ~= bits)
