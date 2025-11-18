@@ -87,85 +87,6 @@ def validate(model: torch.nn.Module, dataset: SRBenchmarkDataset, device: torch.
     return total_psnr / len(dataset)
 
 
-def load_checkpoint_compatible(model: torch.nn.Module, checkpoint_path: Path) -> None:
-    """
-    Load checkpoint with compatibility handling for different quantization versions.
-    
-    Handles:
-    - Unexpected keys from older quantization implementations
-    - Shape mismatches (scalar vs tensor) for running_min/max
-    - Missing keys when loading different quantization methods
-    """
-    checkpoint = torch.load(checkpoint_path, map_location="cpu")
-    print(checkpoint.keys())
-    model_state = model.state_dict()
-    
-    # Filter checkpoint to only include keys that exist in current model
-    filtered_checkpoint = {}
-    skipped_keys = []
-    shape_mismatches = []
-    
-    for key, value in checkpoint.items():
-        if key not in model_state:
-            # Skip keys that don't exist in current model (e.g., old quantization params)
-            skipped_keys.append(key)
-            continue
-        
-        model_value = model_state[key]
-        
-        # Handle shape mismatches
-        if value.shape != model_value.shape:
-            # Special handling for running_min/running_max (scalar -> tensor)
-            if key.endswith((".running_min", ".running_max")):
-                if value.numel() == 1 and model_value.numel() == 1:
-                    # Both are scalars, just reshape
-                    value = value.reshape_as(model_value)
-                elif value.numel() == 1 and model_value.numel() > 1:
-                    # Checkpoint has scalar, model expects tensor - broadcast
-                    value = value.expand_as(model_value)
-                elif value.numel() == model_value.numel():
-                    # Same number of elements, try to reshape
-                    value = value.reshape_as(model_value)
-                else:
-                    shape_mismatches.append((key, value.shape, model_value.shape))
-                    continue
-            elif value.numel() == model_value.numel():
-                # Same number of elements, try to reshape
-                value = value.reshape_as(model_value)
-            else:
-                shape_mismatches.append((key, value.shape, model_value.shape))
-                continue
-        
-        filtered_checkpoint[key] = value
-    
-    if skipped_keys:
-        print(f"Warning: Skipped {len(skipped_keys)} unexpected keys from checkpoint:")
-        for key in skipped_keys[:10]:  # Show first 10
-            print(f"  - {key}")
-        if len(skipped_keys) > 10:
-            print(f"  ... and {len(skipped_keys) - 10} more")
-    
-    if shape_mismatches:
-        print(f"Warning: {len(shape_mismatches)} shape mismatches (skipped):")
-        for key, ckpt_shape, model_shape in shape_mismatches[:5]:
-            print(f"  - {key}: checkpoint {ckpt_shape} vs model {model_shape}")
-        if len(shape_mismatches) > 5:
-            print(f"  ... and {len(shape_mismatches) - 5} more")
-    
-    # Load with strict=False to allow missing keys
-    # missing_keys, unexpected_keys = model.load_state_dict(filtered_checkpoint, strict=True)
-    model.load_state_dict(checkpoint, strict=True)
-    
-    # if missing_keys:
-    #     print(f"Warning: {len(missing_keys)} keys missing from checkpoint (using default initialization):")
-    #     for key in missing_keys[:5]:
-    #         print(f"  - {key}")
-    #     if len(missing_keys) > 5:
-    #         print(f"  ... and {len(missing_keys) - 5} more")
-    
-    print(f"Successfully loaded {len(filtered_checkpoint)}/{len(model_state)} model parameters")
-
-
 def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate a trained ESPCN model on CPU.")
     parser.add_argument("--config", type=str, required=True, help="Path to YAML config.")
@@ -177,8 +98,6 @@ def main() -> None:
     config = load_config(args.config)
     checkpoint_path = Path(args.checkpoint)
 
-    print('quant in config: ', config.get("quantization", None))
-    print('checkpoint path: ', checkpoint_path)
     device = torch.device("cpu")
     model = QuantizedESPCN(
         in_channels=config["model"]["in_channels"],
@@ -187,9 +106,10 @@ def main() -> None:
         upscale_factor=config["model"]["upscale_factor"],
         quant_config=config.get("quantization", None),
     )
-    
-    # Load checkpoint with compatibility handling
-    load_checkpoint_compatible(model, checkpoint_path)
+    state_dict_ckpt = torch.load(checkpoint_path, map_location="cpu")
+    print('checkpoint state dict: ', state_dict_ckpt.keys())
+    print('model state dict: ', model.state_dict().keys())
+    model.load_state_dict(torch.load(checkpoint_path, map_location="cpu"))
 
     dataset = SRBenchmarkDataset(
         hr_dir=Path("data") / args.split,
